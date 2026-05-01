@@ -35,7 +35,7 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(190, 222, 234, 0.2), transparent 25rem),
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(190, 222, 234, 0.07), transparent 25rem),
     radial-gradient(circle at 12% 6%, rgba(211, 143, 97, 0.17), transparent 30rem),
     radial-gradient(circle at 88% 80%, rgba(167, 93, 119, 0.13), transparent 28rem),
     linear-gradient(135deg, var(--bg-deep), var(--bg) 48%, #2d3d49);
@@ -326,6 +326,10 @@ body::after {
   color: var(--text-hi);
   border-color: rgba(184, 216, 229, 0.36);
   background: rgba(184, 216, 229, 0.13);
+  box-shadow:
+    0 0 18px rgba(184, 216, 229, 0.22),
+    0 0 6px rgba(184, 216, 229, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transform: translateY(-1px);
 }
 
