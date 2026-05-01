@@ -5,8 +5,8 @@ const ctx = canvas?.getContext('2d');
 
 const NOW_PLAYING_CONFIG = {
   provider: 'lastfm',
-  lastfmUser: 'cillianpg',
-  lastfmApiKey: '55c992661d448aa8fb2940a5da701c39',
+  lastfmUser: 'Wilford_Studios',
+  lastfmApiKey: 'f13d8b297568b04f7cfa22684044b6bd',
   customEndpoint: '',
   refreshMs: 15000,
   fallback: {
