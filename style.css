@@ -29,6 +29,7 @@
 html {
   min-height: 100%;
   scroll-behavior: smooth;
+  font-size: 120%;
 }
 
 body {
@@ -139,14 +140,14 @@ body::after {
 .page {
   position: relative;
   z-index: 3;
-  width: min(100%, 1040px);
+  width: min(100%, 1383px);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 40px 22px 52px;
+  padding: 40px 28px 52px;
   display: grid;
-  grid-template-columns: minmax(260px, 330px) minmax(0, 620px);
+  grid-template-columns: minmax(310px, 420px) minmax(0, 820px);
   grid-template-rows: 1fr auto;
-  gap: 22px;
+  gap: 26px;
   align-items: stretch;
 }
 
@@ -203,8 +204,8 @@ body::after {
 }
 
 .avatar-wrap {
-  width: 98px;
-  height: 98px;
+  width: 128px;
+  height: 128px;
 }
 
 .avatar-wrap::before {
@@ -226,8 +227,8 @@ body::after {
 .avatar-inner {
   position: relative;
   z-index: 1;
-  width: 98px;
-  height: 98px;
+  width: 128px;
+  height: 128px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 22px;
   display: grid;
@@ -276,7 +277,7 @@ body::after {
 .name {
   color: var(--text-hi);
   font-family: "Syne", sans-serif;
-  font-size: 30px;
+  font-size: 40px;
   font-weight: 800;
   line-height: 0.92;
   letter-spacing: -1px;
@@ -534,7 +535,8 @@ body::after {
   box-shadow: 0 0 12px rgba(184, 216, 229, 0.26);
 }
 
-.now-playing[data-state="playing"] .np-dot {
+.now-playing[data-state="playing"] .np-dot,
+.now-playing[data-state="recent"] .np-dot {
   background: #7dd6a0;
   box-shadow: 0 0 14px rgba(125, 214, 160, 0.55);
   animation: livePulse 1.2s ease-in-out infinite alternate;
@@ -582,7 +584,8 @@ body::after {
   animation: barBounce 0.8s ease-in-out infinite alternate;
 }
 
-.now-playing[data-state="playing"] .np-bar {
+.now-playing[data-state="playing"] .np-bar,
+.now-playing[data-state="recent"] .np-bar {
   background: #7dd6a0;
 }
 
