@@ -100,13 +100,16 @@
         <div class="section">
           <div class="section-label">Posts</div>
 
-          <article class="glass-card post-card">
+          <article class="glass-card post-card" data-post-id="empty">
             <div class="post-date">-</div>
             <h2 class="post-title">Entrada vacía</h2>
             <p class="post-excerpt">...</p>
+            <div class="post-content" style="display: none;">
+              <p>Esta entrada está vacía por ahora.</p>
+            </div>
           </article>
 
-          <article class="glass-card post-card">
+          <article class="glass-card post-card" data-post-id="adventure-time">
             <div class="post-date">30 de abril de 2026</div>
             <h2 class="post-title">Mi serie favorita</h2>
             <p class="post-excerpt">Hora de Aventura o Adventure Time es mi serie favorita de todos los tiempos, le gana a cualquier
@@ -114,14 +117,40 @@
               sino porque es una serie sumamente rica en temas, simbolismos, personajes, historias, etc. En fin, amo a Finn y es mi personaje
               favorito de todos los tiempos.
             </p>
+            <div class="post-content" style="display: none;">
+              <p>Hora de Aventura o Adventure Time es mi serie favorita de todos los tiempos, le gana a cualquier película, obra de lo que sea. Probablemente abra otras entradas hablando de esta serie, no sólo porque es mi favorita, sino porque es una serie sumamente rica en temas, simbolismos, personajes, historias, etc.</p>
+
+              <p>En fin, amo a Finn y es mi personaje favorito de todos los tiempos. Su desarrollo a lo largo de la serie es increíble, pasando de ser un niño aventurero ingenuo a un joven que enfrenta dilemas morales complejos y crece emocionalmente.</p>
+
+              <p>Lo que más me gusta de Adventure Time es cómo mezcla el humor absurdo con momentos profundamente emotivos. La serie no tiene miedo de abordar temas como la pérdida, la soledad, la identidad y el crecimiento personal, todo esto en un mundo de fantasía lleno de personajes memorables.</p>
+
+              <p>La relación entre Finn y Jake es uno de los puntos fuertes de la serie. Su hermandad, lealtad y apoyo mutuo son ejemplos de lo que significa ser un verdadero amigo y hermano. A través de sus aventuras, aprendemos sobre la importancia de la familia elegida y cómo las relaciones nos ayudan a crecer.</p>
+
+              <p>Adventure Time también es notable por su mundo construido. Cada reino, cada personaje, cada historia tiene su propia mitología y profundidad. Desde el Reino Hielo hasta el Reino Fuego, cada lugar tiene su propia cultura y problemas que reflejan temas del mundo real.</p>
+
+              <p>En resumen, Adventure Time es mucho más que una serie de animación. Es una obra de arte que nos enseña sobre la vida, el amor, la amistad y el crecimiento personal, todo mientras nos hace reír y soñar con aventuras increíbles.</p>
+            </div>
           </article>
 
-          <article class="glass-card post-card">
+          <article class="glass-card post-card" data-post-id="beetles">
             <div class="post-date">30 de abril de 2026</div>
             <h2 class="post-title">¿Por qué me gustan los escarabajos?</h2>
-            <p class="post-excerpt">No hay una respuesta corta a esta pregunta, son mis animales favoritos 
-              junto con los tiburones desde que tengo uso de razón, y cuanto más aprendía de ellos más me 
+            <p class="post-excerpt">No hay una respuesta corta a esta pregunta, son mis animales favoritos
+              junto con los tiburones desde que tengo uso de razón, y cuanto más aprendía de ellos más me
               fascinaban y sobre todo me fascinaba el hecho de que fueran tan diferentes a los humanos.</p>
+            <div class="post-content" style="display: none;">
+              <p>No hay una respuesta corta a esta pregunta, son mis animales favoritos junto con los tiburones desde que tengo uso de razón, y cuanto más aprendía de ellos más me fascinaban y sobre todo me fascinaba el hecho de que fueran tan diferentes a los humanos.</p>
+
+              <p>Los escarabajos son criaturas increíbles. Existen más de 400,000 especies descritas, lo que los convierte en el orden más diverso de insectos. Desde los pequeños escarabajos del suelo hasta los imponentes escarabajos hércules, cada uno tiene su propia adaptación y propósito en el ecosistema.</p>
+
+              <p>Lo que más me atrae de ellos es su diversidad de formas y comportamientos. Algunos escarabajos tienen colores metálicos brillantes que parecen joyas vivientes, otros tienen formas extrañas que parecen de otro mundo. Sus caparazones duros les protegen, sus antenas les permiten explorar su entorno, y sus patas adaptadas les permiten moverse en diferentes tipos de terreno.</p>
+
+              <p>Los escarabajos también tienen roles ecológicos importantes. Algunos son polinizadores, otros descomponen materia orgánica, y algunos son depredadores que controlan poblaciones de otros insectos. Sin ellos, muchos ecosistemas colapsarían.</p>
+
+              <p>Además, los escarabajos han sido importantes en muchas culturas humanas. En el antiguo Egipto, el escarabajo pelotero era sagrado y representaba la renovación y la transformación. En muchas culturas, los escarabajos son símbolos de resistencia, perseverancia y adaptación.</p>
+
+              <p>Para mí, los escarabajos representan la belleza y complejidad de la naturaleza. Son criaturas que han evolucionado durante millones de años para ocupar casi todos los nichos ecológicos posibles. Su existencia nos recuerda que hay mucho más en este mundo de lo que podemos ver a simple vista, y que cada criatura, por pequeña que sea, tiene su propio valor y propósito.</p>
+            </div>
           </article>
         </div>
       </section>
@@ -130,7 +159,18 @@
 
     </main>
 
-    <footer class="footer">blog personal · cillian</footer>
+    <footer class="footer"></footer>
+
+    <div id="post-modal" class="post-modal" style="display: none;">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closePostModal()" aria-label="Cerrar">✕</button>
+        <div class="modal-header">
+          <div class="modal-date" id="modal-date"></div>
+          <h2 class="modal-title" id="modal-title"></h2>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+      </div>
+    </div>
 
   </div>
 

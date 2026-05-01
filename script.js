@@ -311,11 +311,63 @@ document.addEventListener('pointerleave', () => {
   setPointerPosition(window.innerWidth / 2, window.innerHeight / 2);
 });
 
+function openPostModal(postId) {
+  const postCard = document.querySelector(`[data-post-id="${postId}"]`);
+  if (!postCard) return;
+
+  const modal = document.getElementById('post-modal');
+  const modalDate = document.getElementById('modal-date');
+  const modalTitle = document.getElementById('modal-title');
+  const modalBody = document.getElementById('modal-body');
+
+  const date = postCard.querySelector('.post-date').textContent;
+  const title = postCard.querySelector('.post-title').textContent;
+  const content = postCard.querySelector('.post-content').innerHTML;
+
+  modalDate.textContent = date;
+  modalTitle.textContent = title;
+  modalBody.innerHTML = content;
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closePostModal() {
+  const modal = document.getElementById('post-modal');
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function initPostCards() {
+  document.querySelectorAll('.post-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const postId = card.getAttribute('data-post-id');
+      if (postId) {
+        openPostModal(postId);
+      }
+    });
+  });
+
+  const modal = document.getElementById('post-modal');
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closePostModal();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closePostModal();
+    }
+  });
+}
+
 updateClock();
 setInterval(updateClock, 1000);
 initNowPlayingTracking();
 bindCardInteractions();
 initBackground();
+initPostCards();
 
 window.addEventListener('beforeunload', () => {
   if (animationFrame) cancelAnimationFrame(animationFrame);
