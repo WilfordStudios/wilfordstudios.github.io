@@ -151,24 +151,36 @@ function cleanLetterboxdTitle(raw) {
 
 async function fetchFilmCard() {
   const { letterboxdUser, fallbackUrl } = MEDIA.film;
-  const rssUrl = `https://letterboxd.com/${letterboxdUser}/rss/`;
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=1`;
+  const rssUrl    = `https://letterboxd.com/${letterboxdUser}/rss/`;
 
-  const res = await fetch(apiUrl);
+  // Fetch the raw RSS XML via a CORS proxy and parse it ourselves.
+  // rss2json often strips or loses the thumbnail; the img is always in <description>.
+  const proxyUrl  = `https://corsproxy.io/?url=${encodeURIComponent(rssUrl)}`;
+  const res       = await fetch(proxyUrl);
   if (!res.ok) throw new Error('RSS fetch error');
 
-  const data = await res.json();
-  if (data.status !== 'ok' || !data.items?.length) throw new Error('No Letterboxd items');
+  const xmlText = await res.text();
+  const parser  = new DOMParser();
+  const doc     = parser.parseFromString(xmlText, 'application/xml');
 
-  const item     = data.items[0];
-  const coverUrl = item.thumbnail || extractImgSrc(item.description || '');
-  const title    = cleanLetterboxdTitle(item.title);
+  const items = Array.from(doc.querySelectorAll('item'));
+  if (!items.length) throw new Error('No Letterboxd items');
 
-  setMediaCard('film', {
-    title,
-    coverUrl,
-    href: item.link || fallbackUrl,
-  });
+  // Prefer diary entries (they have <letterboxd:filmTitle>)
+  const item = items.find(i => i.getElementsByTagNameNS('*', 'filmTitle').length > 0) || items[0];
+
+  // Title: use <letterboxd:filmTitle> when available, else strip year/rating from <title>
+  const filmTitleEl = item.getElementsByTagNameNS('*', 'filmTitle')[0];
+  const rawTitle    = item.querySelector('title')?.textContent || '';
+  const title       = filmTitleEl?.textContent?.trim() || cleanLetterboxdTitle(rawTitle);
+
+  // Poster: always inside the CDATA <description> as an <img src="...">
+  const description = item.querySelector('description')?.textContent || '';
+  const coverUrl    = extractImgSrc(description);
+
+  const href = item.querySelector('link')?.textContent?.trim() || fallbackUrl;
+
+  setMediaCard('film', { title, coverUrl, href });
 }
 
 // ─── Media Cards — Serializd via RSS→JSON ────────────────────────────────────
