@@ -37,23 +37,94 @@
     <main class="content-shell">
 
       <section id="tab-links" class="tab-content active">
-        <div class="glass-card now-playing" data-state="idle">
-          <div class="np-icon">♫</div>
-          <a class="np-cover-link" href="https://open.spotify.com/user/r94decpncosw8hogydivy5ma3" target="_blank" rel="noopener" aria-label="Abrir Spotify">
-            <div class="np-icon" id="np-cover">♫</div>
-          </a>
-          <div class="np-info">
-            <div class="np-label">escuchando ahora</div>
-            <div class="np-track">spotify · mi perfil</div>
-            <div class="np-artist" id="np-artist"></div>
-          </div>
-          <div class="np-bars" aria-hidden="true">
-            <div class="np-bar"></div>
-            <div class="np-bar"></div>
-            <div class="np-bar"></div>
-            <div class="np-bar"></div>
-          </div>
-        </div>
+<div class="media-grid">
+
+  <a class="glass-card media-card"
+     id="spotify-card"
+     href="https://open.spotify.com/user/Wilford_Studios"
+     target="_blank"
+     rel="noopener">
+
+    <div class="media-cover">
+      <img id="spotify-image" src="" alt="Spotify" />
+    </div>
+
+    <div class="media-content">
+      <div class="media-label">Última canción</div>
+      <div class="media-title" id="spotify-title">Cargando...</div>
+      <div class="media-subtitle" id="spotify-subtitle">Spotify</div>
+    </div>
+  </a>
+
+  <a class="glass-card media-card"
+     id="letterboxd-card"
+     href="https://letterboxd.com/Wilford_Studios"
+     target="_blank"
+     rel="noopener">
+
+    <div class="media-cover">
+      <img id="letterboxd-image" src="" alt="Letterboxd" />
+    </div>
+
+    <div class="media-content">
+      <div class="media-label">Última película</div>
+      <div class="media-title" id="letterboxd-title">Cargando...</div>
+      <div class="media-subtitle" id="letterboxd-subtitle">Letterboxd</div>
+    </div>
+  </a>
+
+  <a class="glass-card media-card"
+     id="serializd-card"
+     href="https://www.serializd.com/user/Wilford_Studios"
+     target="_blank"
+     rel="noopener">
+
+    <div class="media-cover">
+      <img id="serializd-image" src="" alt="Serializd" />
+    </div>
+
+    <div class="media-content">
+      <div class="media-label">Último episodio</div>
+      <div class="media-title" id="serializd-title">Cargando...</div>
+      <div class="media-subtitle" id="serializd-subtitle">Serializd</div>
+    </div>
+  </a>
+
+  <a class="glass-card media-card"
+     id="backloggd-card"
+     href="https://www.backloggd.com/u/Wilford_Studios"
+     target="_blank"
+     rel="noopener">
+
+    <div class="media-cover">
+      <img id="backloggd-image" src="" alt="Backloggd" />
+    </div>
+
+    <div class="media-content">
+      <div class="media-label">Último juego</div>
+      <div class="media-title" id="backloggd-title">Cargando...</div>
+      <div class="media-subtitle" id="backloggd-subtitle">Backloggd</div>
+    </div>
+  </a>
+
+  <a class="glass-card media-card"
+     id="comic-card"
+     href="https://leagueofcomicgeeks.com/profile/Wilford_Studios"
+     target="_blank"
+     rel="noopener">
+
+    <div class="media-cover">
+      <img id="comic-image" src="" alt="Comic" />
+    </div>
+
+    <div class="media-content">
+      <div class="media-label">Último comic</div>
+      <div class="media-title" id="comic-title">Cargando...</div>
+      <div class="media-subtitle" id="comic-subtitle">League of Comic Geeks</div>
+    </div>
+  </a>
+
+</div>
 
         <div class="section">
           <div class="section-label">Redes y perfiles</div>

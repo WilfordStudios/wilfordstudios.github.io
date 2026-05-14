@@ -16,6 +16,119 @@ const NOW_PLAYING_CONFIG = {
   },
 };
 
+const MEDIA_CONFIG = {
+  spotify: {
+    user: 'Wilford_Studios',
+    api: 'https://lastfm-last-played.biancarosa.com.br/Wilford_Studios/latest-song'
+  },
+
+  letterboxd: {
+    rss: 'https://letterboxd.com/Wilford_Studios/rss/'
+  },
+
+  serializd: {
+    rss: 'https://www.serializd.com/rss/Wilford_Studios'
+  },
+
+  backloggd: {
+    rss: 'https://www.backloggd.com/u/Wilford_Studios/rss/'
+  },
+
+  comics: {
+    rss: 'https://leagueofcomicgeeks.com/profile/Wilford_Studios/rss'
+  }
+};
+
+function setMediaCard(prefix, data) {
+}
+
+function extractImage(html) {
+  const match = html.match(/<img[^>]+src="([^"]+)"/i);
+  return match ? match[1] : '';
+}
+
+async function fetchLetterboxd() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.letterboxd.rss);
+    const item = data.items?.[0];
+
+    if (!item) return;
+
+    setMediaCard('letterboxd', {
+      title: item.title,
+      subtitle: 'Letterboxd',
+      image: extractImage(item.description)
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function fetchSerializd() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.serializd.rss);
+    const item = data.items?.[0];
+
+    if (!item) return;
+
+    setMediaCard('serializd', {
+      title: item.title,
+      subtitle: 'Serializd',
+      image: extractImage(item.description)
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function fetchBackloggd() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.backloggd.rss);
+    const item = data.items?.[0];
+
+    if (!item) return;
+
+    setMediaCard('backloggd', {
+      title: item.title,
+      subtitle: 'Backloggd',
+      image: extractImage(item.description)
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function fetchComics() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.comics.rss);
+    const item = data.items?.[0];
+
+    if (!item) return;
+
+    setMediaCard('comic', {
+      title: item.title,
+      subtitle: 'League of Comic Geeks',
+      image: extractImage(item.description)
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadMediaCards() {
+  await Promise.all([
+    fetchSpotify(),
+    fetchLetterboxd(),
+    fetchSerializd(),
+    fetchBackloggd(),
+    fetchComics()
+  ]);
+}
+
 let pointerX = window.innerWidth / 2;
 let pointerY = window.innerHeight / 2;
 let particles = [];
@@ -313,7 +426,7 @@ document.addEventListener('pointerleave', () => {
 
 updateClock();
 setInterval(updateClock, 1000);
-initNowPlayingTracking();
+loadMediaCards();
 bindCardInteractions();
 initBackground();
 
