@@ -3,169 +3,203 @@ const root = document.documentElement;
 const canvas = document.getElementById('bg-canvas');
 const ctx = canvas?.getContext('2d');
 
-const MEDIA_CONFIG = {
-  spotify: {
-    api: 'https://lastfm-last-played.biancarosa.com.br/Wilford_Studios/latest-song'
+// ─── Media Cards Config ───────────────────────────────────────────────────────
+
+const MEDIA = {
+  music: {
+    lastfmUser:   'Wilford_Studios',
+    lastfmApiKey: 'f13d8b297568b04f7cfa22684044b6bd',
+    fallbackUrl:  'https://open.spotify.com/user/r94decpncosw8hogydivy5ma3',
+    refreshMs:    15000,
   },
-  letterboxd: {
-    rss: 'https://letterboxd.com/Wilford_Studios/rss/'
+  film: {
+    letterboxdUser: 'Wilford_Studios',
+    fallbackUrl:    'https://letterboxd.com/Wilford_Studios',
+    refreshMs:      120000,
   },
-  serializd: {
-    rss: 'https://www.serializd.com/rss/Wilford_Studios'
-  },
-  backloggd: {
-    rss: 'https://www.backloggd.com/u/Wilford_Studios/rss/'
-  },
-  comics: {
-    rss: 'https://leagueofcomicgeeks.com/profile/Wilford_Studios/rss'
-  }
 };
 
-let pointerX = window.innerWidth / 2;
-let pointerY = window.innerHeight / 2;
-let particles = [];
-let animationFrame = null;
-let nowPlayingInterval = null;
+// ─── Tab switching ────────────────────────────────────────────────────────────
 
 function switchTab(tab, el) {
-  document.querySelectorAll('.tab-content').forEach(section => {
-    section.classList.remove('active');
-  });
-
-  document.querySelectorAll('.pill').forEach(pill => {
-    pill.classList.remove('active');
-  });
-
+  document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
   const target = document.getElementById(`tab-${tab}`);
   if (target) target.classList.add('active');
   if (el) el.classList.add('active');
 }
 
+// ─── Clock ────────────────────────────────────────────────────────────────────
+
 function updateClock() {
   const time = new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   }).format(new Date());
-
   const clock = document.getElementById('clock');
   if (clock) clock.textContent = time;
 }
 
-async function fetchRSS(url) {
-  const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
-  const response = await fetch(api);
-  return response.json();
+// ─── Media Cards — helpers ────────────────────────────────────────────────────
+
+/**
+ * Populate one media card with live data.
+ * @param {string} id        — 'music' | 'film'
+ * @param {object} opts
+ *   title     {string}
+ *   coverUrl  {string}   — full image URL, or '' for no image
+ *   href      {string}   — link target
+ *   isPlaying {boolean}  — show green dot (music only)
+ */
+function setMediaCard(id, { title, coverUrl, href, isPlaying = false }) {
+  const card    = document.getElementById(`mc-${id}`);
+  const coverEl = document.getElementById(`mc-${id}-cover`);
+  const titleEl = document.getElementById(`mc-${id}-title`);
+  const linkEl  = document.getElementById(`mc-${id}-link`);
+
+  if (!card) return;
+
+  // State & dot
+  card.dataset.state   = 'loaded';
+  card.dataset.playing = String(isPlaying);
+
+  // Title
+  if (titleEl) titleEl.textContent = title || '—';
+
+  // Link
+  if (linkEl && href) linkEl.href = href;
+
+  // Cover
+  if (coverEl) {
+    coverEl.innerHTML = '';
+    if (coverUrl) {
+      const img  = document.createElement('img');
+      img.src    = coverUrl;
+      img.alt    = '';
+      img.loading = 'lazy';
+      // On error fall back to placeholder icon
+      img.onerror = () => {
+        coverEl.innerHTML = '';
+        const ph = document.createElement('span');
+        ph.className = 'mc-ph-icon';
+        ph.textContent = id === 'music' ? '♫' : 'Lb';
+        coverEl.appendChild(ph);
+      };
+      coverEl.appendChild(img);
+    } else {
+      const ph = document.createElement('span');
+      ph.className  = 'mc-ph-icon';
+      ph.textContent = id === 'music' ? '♫' : 'Lb';
+      coverEl.appendChild(ph);
+    }
+  }
 }
 
-function extractImage(html) {
+// ─── Media Cards — Spotify via Last.FM ───────────────────────────────────────
+
+async function fetchMusicCard() {
+  const { lastfmUser, lastfmApiKey, fallbackUrl } = MEDIA.music;
+  const params = new URLSearchParams({
+    method:  'user.getrecenttracks',
+    user:    lastfmUser,
+    api_key: lastfmApiKey,
+    format:  'json',
+    limit:   '1',
+  });
+
+  const res = await fetch(`https://ws.audioscrobbler.com/2.0/?${params}`);
+  if (!res.ok) throw new Error('Last.fm error');
+
+  const data  = await res.json();
+  const track = data?.recenttracks?.track;
+  const t     = Array.isArray(track) ? track[0] : track;
+  if (!t) return;
+
+  const isPlaying = t['@attr']?.nowplaying === 'true';
+  const images    = t?.image || [];
+  const coverUrl  = [...images].reverse().find(i => i['#text'])?.['#text'] || '';
+
+  setMediaCard('music', {
+    title:     t.name || '—',
+    coverUrl,
+    href:      t.url  || fallbackUrl,
+    isPlaying,
+  });
+}
+
+// ─── Media Cards — Letterboxd via RSS→JSON ───────────────────────────────────
+
+function extractImgSrc(html) {
   if (!html) return '';
-  const match = html.match(/<img[^>]+src="([^"]+)"/i);
-  return match ? match[1] : '';
+  const m = html.match(/<img[^>]+src="([^"]+)"/i);
+  return m?.[1] || '';
 }
 
-function setMediaCard(prefix, data) {
-  const title = document.getElementById(`${prefix}-title`);
-  const subtitle = document.getElementById(`${prefix}-subtitle`);
-  const image = document.getElementById(`${prefix}-image`);
-
-  if (!title || !subtitle || !image) return;
-
-  title.textContent = data.title || 'Sin datos';
-  subtitle.textContent = data.subtitle || '';
-  image.src = data.image || 'assets/profile-durin.jpg';
+function cleanLetterboxdTitle(raw) {
+  if (!raw) return '—';
+  // "The Dark Knight, 2008 - ★★★★★" → "The Dark Knight"
+  return raw.replace(/,\s*\d{4}.*$/, '').trim();
 }
 
-async function fetchSpotify() {
-  try {
-    const response = await fetch(MEDIA_CONFIG.spotify.api);
-    const data = await response.json();
+async function fetchFilmCard() {
+  const { letterboxdUser, fallbackUrl } = MEDIA.film;
+  const rssUrl = `https://letterboxd.com/${letterboxdUser}/rss/`;
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=1`;
 
-    setMediaCard('spotify', {
-      title: data.track?.name || 'Sin reproducción',
-      subtitle: data.track?.artist['#text'] || 'Spotify',
-      image: data.track?.image?.['#text'] || ''
-    });
-  } catch (error) {
-    console.error(error);
-  }
+  const res = await fetch(apiUrl);
+  if (!res.ok) throw new Error('RSS fetch error');
+
+  const data = await res.json();
+  if (data.status !== 'ok' || !data.items?.length) throw new Error('No Letterboxd items');
+
+  const item     = data.items[0];
+  const coverUrl = item.thumbnail || extractImgSrc(item.description || '');
+  const title    = cleanLetterboxdTitle(item.title);
+
+  setMediaCard('film', {
+    title,
+    coverUrl,
+    href: item.link || fallbackUrl,
+  });
 }
 
-async function fetchLetterboxd() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.letterboxd.rss);
-    const item = data.items?.[0];
-    if (!item) return;
+// ─── Media Cards — Init ───────────────────────────────────────────────────────
 
-    setMediaCard('letterboxd', {
-      title: item.title,
-      subtitle: 'Letterboxd',
-      image: extractImage(item.description)
-    });
-  } catch (error) {
-    console.error(error);
-  }
+function initMediaCards() {
+  // Mark active cards as loading
+  ['music', 'film'].forEach(id => {
+    const card = document.getElementById(`mc-${id}`);
+    if (card) card.dataset.state = 'loading';
+  });
+
+  const tryMusic = () => fetchMusicCard().catch(() =>
+    setMediaCard('music', { title: 'spotify', coverUrl: '', href: MEDIA.music.fallbackUrl })
+  );
+  const tryFilm  = () => fetchFilmCard().catch(() =>
+    setMediaCard('film',  { title: 'letterboxd', coverUrl: '', href: MEDIA.film.fallbackUrl })
+  );
+
+  // Initial fetch
+  tryMusic();
+  tryFilm();
+
+  // Polling intervals
+  setInterval(tryMusic, MEDIA.music.refreshMs);
+  setInterval(tryFilm,  MEDIA.film.refreshMs);
+
+  // Refresh on tab visibility restore
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      tryMusic();
+      tryFilm();
+    }
+  });
 }
 
-async function fetchSerializd() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.serializd.rss);
-    const item = data.items?.[0];
-    if (!item) return;
+// ─── Card 3D tilt interactions ────────────────────────────────────────────────
 
-    setMediaCard('serializd', {
-      title: item.title,
-      subtitle: 'Serializd',
-      image: extractImage(item.description)
-    });
-  } catch (error) {
-    console.error(error);
-  }
-}
-
-async function fetchBackloggd() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.backloggd.rss);
-    const item = data.items?.[0];
-    if (!item) return;
-
-    setMediaCard('backloggd', {
-      title: item.title,
-      subtitle: 'Backloggd',
-      image: extractImage(item.description)
-    });
-  } catch (error) {
-    console.error(error);
-  }
-}
-
-async function fetchComics() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.comics.rss);
-    const item = data.items?.[0];
-    if (!item) return;
-
-    setMediaCard('comic', {
-      title: item.title,
-      subtitle: 'League of Comic Geeks',
-      image: extractImage(item.description)
-    });
-  } catch (error) {
-    console.error(error);
-  }
-}
-
-async function loadMediaCards() {
-  await Promise.all([
-    fetchSpotify(),
-    fetchLetterboxd(),
-    fetchSerializd(),
-    fetchBackloggd(),
-    fetchComics()
-  ]);
-}
+let pointerX = window.innerWidth  / 2;
+let pointerY = window.innerHeight / 2;
 
 function setPointerPosition(x, y) {
   pointerX = x;
@@ -180,14 +214,15 @@ function bindCardInteractions() {
       const rect = card.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
-      const px = x / rect.width - 0.5;
+      const px = x / rect.width  - 0.5;
       const py = y / rect.height - 0.5;
 
       card.style.setProperty('--card-x', `${x}px`);
       card.style.setProperty('--card-y', `${y}px`);
 
-      if (!prefersReducedMotion && card.matches('a, article, .now-playing')) {
-        card.style.transform = `translateY(-2px) rotateX(${-py * 2.8}deg) rotateY(${px * 3.2}deg)`;
+      if (!prefersReducedMotion && card.matches('a, article, .media-card')) {
+        card.style.transform =
+          `translateY(-2px) rotateX(${-py * 2.8}deg) rotateY(${px * 3.2}deg)`;
       }
     });
 
@@ -199,64 +234,62 @@ function bindCardInteractions() {
   });
 }
 
+// ─── Particle background ──────────────────────────────────────────────────────
+
+let particles      = [];
+let animationFrame = null;
+
 function resizeCanvas() {
   if (!canvas || !ctx) return;
-
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(window.innerWidth * dpr);
+  canvas.width  = Math.floor(window.innerWidth  * dpr);
   canvas.height = Math.floor(window.innerHeight * dpr);
-  canvas.style.width = `${window.innerWidth}px`;
+  canvas.style.width  = `${window.innerWidth}px`;
   canvas.style.height = `${window.innerHeight}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const count = Math.min(90, Math.max(42, Math.floor(window.innerWidth / 16)));
   particles = Array.from({ length: count }, () => ({
-    x: Math.random() * window.innerWidth,
-    y: Math.random() * window.innerHeight,
+    x:      Math.random() * window.innerWidth,
+    y:      Math.random() * window.innerHeight,
     radius: Math.random() * 1.5 + 0.35,
-    vx: (Math.random() - 0.5) * 0.14,
-    vy: (Math.random() - 0.5) * 0.14,
-    alpha: Math.random() * 0.36 + 0.1,
+    vx:     (Math.random() - 0.5) * 0.14,
+    vy:     (Math.random() - 0.5) * 0.14,
+    alpha:  Math.random() * 0.36 + 0.1,
   }));
 }
 
 function drawBackground() {
   if (!canvas || !ctx) return;
-
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-  particles.forEach(particle => {
-    const dx = pointerX - particle.x;
-    const dy = pointerY - particle.y;
-    const distance = Math.hypot(dx, dy);
-    const pull = Math.max(0, 1 - distance / 460) * 0.014;
-
-    particle.x += particle.vx + dx * pull;
-    particle.y += particle.vy + dy * pull;
-
-    if (particle.x < -10) particle.x = window.innerWidth + 10;
-    if (particle.x > window.innerWidth + 10) particle.x = -10;
-    if (particle.y < -10) particle.y = window.innerHeight + 10;
-    if (particle.y > window.innerHeight + 10) particle.y = -10;
-
+  particles.forEach(p => {
+    const dx   = pointerX - p.x;
+    const dy   = pointerY - p.y;
+    const dist = Math.hypot(dx, dy);
+    const pull = Math.max(0, 1 - dist / 460) * 0.014;
+    p.x += p.vx + dx * pull;
+    p.y += p.vy + dy * pull;
+    if (p.x < -10) p.x = window.innerWidth  + 10;
+    if (p.x > window.innerWidth  + 10) p.x = -10;
+    if (p.y < -10) p.y = window.innerHeight + 10;
+    if (p.y > window.innerHeight + 10) p.y = -10;
     ctx.beginPath();
-    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(188, 218, 230, ${particle.alpha})`;
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(188,218,230,${p.alpha})`;
     ctx.fill();
   });
 
-  for (let i = 0; i < particles.length; i += 1) {
-    for (let j = i + 1; j < particles.length; j += 1) {
-      const a = particles[i];
-      const b = particles[j];
-      const distance = Math.hypot(a.x - b.x, a.y - b.y);
-
-      if (distance < 110) {
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const a = particles[i], b = particles[j];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 110) {
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = `rgba(184, 216, 229, ${(1 - distance / 110) * 0.09})`;
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(184,216,229,${(1 - d / 110) * 0.09})`;
+        ctx.lineWidth   = 1;
         ctx.stroke();
       }
     }
@@ -267,27 +300,24 @@ function drawBackground() {
 
 function initBackground() {
   if (!canvas || !ctx || prefersReducedMotion) return;
-
   resizeCanvas();
   drawBackground();
   window.addEventListener('resize', resizeCanvas);
 }
 
-document.addEventListener('pointermove', event => {
-  setPointerPosition(event.clientX, event.clientY);
-}, { passive: true });
+// ─── Pointer tracking ─────────────────────────────────────────────────────────
 
-document.addEventListener('pointerleave', () => {
-  setPointerPosition(window.innerWidth / 2, window.innerHeight / 2);
-});
+document.addEventListener('pointermove', e => setPointerPosition(e.clientX, e.clientY), { passive: true });
+document.addEventListener('pointerleave', () => setPointerPosition(window.innerWidth / 2, window.innerHeight / 2));
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
 
 updateClock();
 setInterval(updateClock, 1000);
-loadMediaCards();
+initMediaCards();
 bindCardInteractions();
 initBackground();
 
 window.addEventListener('beforeunload', () => {
   if (animationFrame) cancelAnimationFrame(animationFrame);
-  if (nowPlayingInterval) clearInterval(nowPlayingInterval);
 });

@@ -37,64 +37,88 @@
     <main class="content-shell">
 
       <section id="tab-links" class="tab-content active">
+
+        <!-- Media Activity Grid -->
         <div class="media-grid">
 
-          <a class="glass-card media-card" href="https://open.spotify.com/user/Wilford_Studios" target="_blank" rel="noopener">
-            <div class="media-cover">
-              <img id="spotify-image" src="assets/profile-durin.jpg" alt="Spotify">
+          <!-- 1. Spotify / Last.FM -->
+          <div class="media-card glass-card" id="mc-music" data-state="loading">
+            <a class="mc-cover-wrap" id="mc-music-link"
+               href="https://open.spotify.com/user/r94decpncosw8hogydivy5ma3"
+               target="_blank" rel="noopener" aria-label="Ultima cancion">
+              <div class="mc-cover" id="mc-music-cover">
+                <span class="mc-ph-icon">&#9835;</span>
+              </div>
+              <span class="mc-live-dot" id="mc-music-dot" aria-hidden="true"></span>
+            </a>
+            <div class="mc-meta">
+              <div class="mc-platform">Spotify</div>
+              <div class="mc-title" id="mc-music-title">cargando&hellip;</div>
             </div>
-            <div class="media-content">
-              <div class="media-label">Última canción</div>
-              <div class="media-title" id="spotify-title">Cargando...</div>
-              <div class="media-subtitle" id="spotify-subtitle">Spotify</div>
-            </div>
-          </a>
+          </div>
 
-          <a class="glass-card media-card" href="https://letterboxd.com/Wilford_Studios" target="_blank" rel="noopener">
-            <div class="media-cover">
-              <img id="letterboxd-image" src="assets/profile-durin.jpg" alt="Letterboxd">
+          <!-- 2. Letterboxd -->
+          <div class="media-card glass-card" id="mc-film" data-state="loading">
+            <a class="mc-cover-wrap" id="mc-film-link"
+               href="https://letterboxd.com/Wilford_Studios"
+               target="_blank" rel="noopener" aria-label="Ultima pelicula">
+              <div class="mc-cover" id="mc-film-cover">
+                <span class="mc-ph-icon">Lb</span>
+              </div>
+            </a>
+            <div class="mc-meta">
+              <div class="mc-platform">Letterboxd</div>
+              <div class="mc-title" id="mc-film-title">cargando&hellip;</div>
             </div>
-            <div class="media-content">
-              <div class="media-label">Última película</div>
-              <div class="media-title" id="letterboxd-title">Cargando...</div>
-              <div class="media-subtitle" id="letterboxd-subtitle">Letterboxd</div>
-            </div>
-          </a>
+          </div>
 
-          <a class="glass-card media-card" href="https://www.serializd.com/user/Wilford_Studios" target="_blank" rel="noopener">
-            <div class="media-cover">
-              <img id="serializd-image" src="assets/profile-durin.jpg" alt="Serializd">
+          <!-- 3. Serializd (placeholder) -->
+          <div class="media-card glass-card mc-inactive" id="mc-series">
+            <a class="mc-cover-wrap"
+               href="https://serializd.com/user/Wilford_Studios"
+               target="_blank" rel="noopener" aria-label="Ultima serie">
+              <div class="mc-cover">
+                <span class="mc-ph-icon">Sz</span>
+              </div>
+            </a>
+            <div class="mc-meta">
+              <div class="mc-platform">Serializd</div>
+              <div class="mc-title mc-pending">proximamente</div>
             </div>
-            <div class="media-content">
-              <div class="media-label">Último episodio</div>
-              <div class="media-title" id="serializd-title">Cargando...</div>
-              <div class="media-subtitle" id="serializd-subtitle">Serializd</div>
-            </div>
-          </a>
+          </div>
 
-          <a class="glass-card media-card" href="https://www.backloggd.com/u/Wilford_Studios" target="_blank" rel="noopener">
-            <div class="media-cover">
-              <img id="backloggd-image" src="assets/profile-durin.jpg" alt="Backloggd">
+          <!-- 4. Backloggd (placeholder) -->
+          <div class="media-card glass-card mc-inactive" id="mc-game">
+            <a class="mc-cover-wrap"
+               href="https://backloggd.com/u/Wilford_Studios"
+               target="_blank" rel="noopener" aria-label="Ultimo juego">
+              <div class="mc-cover">
+                <span class="mc-ph-icon">Bg</span>
+              </div>
+            </a>
+            <div class="mc-meta">
+              <div class="mc-platform">Backloggd</div>
+              <div class="mc-title mc-pending">proximamente</div>
             </div>
-            <div class="media-content">
-              <div class="media-label">Último juego</div>
-              <div class="media-title" id="backloggd-title">Cargando...</div>
-              <div class="media-subtitle" id="backloggd-subtitle">Backloggd</div>
-            </div>
-          </a>
+          </div>
 
-          <a class="glass-card media-card" href="https://leagueofcomicgeeks.com/profile/Wilford_Studios" target="_blank" rel="noopener">
-            <div class="media-cover">
-              <img id="comic-image" src="assets/profile-durin.jpg" alt="Comic">
+          <!-- 5. League of Comic Geeks (placeholder) -->
+          <div class="media-card glass-card mc-inactive" id="mc-comic">
+            <a class="mc-cover-wrap"
+               href="https://leagueofcomicgeeks.com/profile/Wilford_Studios"
+               target="_blank" rel="noopener" aria-label="Ultimo comic">
+              <div class="mc-cover">
+                <span class="mc-ph-icon">CG</span>
+              </div>
+            </a>
+            <div class="mc-meta">
+              <div class="mc-platform">Comics</div>
+              <div class="mc-title mc-pending">proximamente</div>
             </div>
-            <div class="media-content">
-              <div class="media-label">Último comic</div>
-              <div class="media-title" id="comic-title">Cargando...</div>
-              <div class="media-subtitle" id="comic-subtitle">League of Comic Geeks</div>
-            </div>
-          </a>
+          </div>
 
         </div>
+        <!-- /Media Activity Grid -->
 
         <div class="section">
           <div class="section-label">Redes y perfiles</div>
@@ -105,7 +129,7 @@
               <div class="social-name">twitter</div>
               <div class="social-handle">@durincoffee</div>
             </div>
-            <span class="social-arrow">↗</span>
+            <span class="social-arrow">&#x2197;</span>
           </a>
 
           <a href="https://letterboxd.com/petrolero" class="glass-card social-link" target="_blank" rel="noopener">
@@ -114,7 +138,7 @@
               <div class="social-name">Letterboxd</div>
               <div class="social-handle">petrolero</div>
             </div>
-            <span class="social-arrow">↗</span>
+            <span class="social-arrow">&#x2197;</span>
           </a>
 
           <a href="https://open.spotify.com/user/r94decpncosw8hogydivy5ma3" class="glass-card social-link" target="_blank" rel="noopener">
@@ -123,7 +147,7 @@
               <div class="social-name">spotify</div>
               <div class="social-handle">mi perfil</div>
             </div>
-            <span class="social-arrow">↗</span>
+            <span class="social-arrow">&#x2197;</span>
           </a>
 
           <a href="https://discord.com/users/1123931910079528960" class="glass-card social-link" target="_blank" rel="noopener">
@@ -132,7 +156,7 @@
               <div class="social-name">discord</div>
               <div class="social-handle">catslcver</div>
             </div>
-            <span class="social-arrow">↗</span>
+            <span class="social-arrow">&#x2197;</span>
           </a>
         </div>
       </section>
@@ -143,7 +167,7 @@
 
           <article class="glass-card post-card">
             <div class="post-date">-</div>
-            <h2 class="post-title">Entrada vacía</h2>
+            <h2 class="post-title">Entrada vac&iacute;a</h2>
             <p class="post-excerpt">...</p>
           </article>
 
@@ -151,7 +175,7 @@
             <div class="post-date">30 de abril de 2026</div>
             <h2 class="post-title">Mi serie favorita</h2>
             <p class="post-excerpt">Hora de Aventura o Adventure Time es mi serie favorita de todos los tiempos, le gana a cualquier
-              película, obra de lo que sea. Probablemente abra otras entradas hablando de esta serie, no sólo porque es mi favorita,
+              pel&iacute;cula, obra de lo que sea. Probablemente abra otras entradas hablando de esta serie, no s&oacute;lo porque es mi favorita,
               sino porque es una serie sumamente rica en temas, simbolismos, personajes, historias, etc. En fin, amo a Finn y es mi personaje
               favorito de todos los tiempos.
             </p>
@@ -159,19 +183,17 @@
 
           <article class="glass-card post-card">
             <div class="post-date">30 de abril de 2026</div>
-            <h2 class="post-title">¿Por qué me gustan los escarabajos?</h2>
+            <h2 class="post-title">&iquest;Por qu&eacute; me gustan los escarabajos?</h2>
             <p class="post-excerpt">No hay una respuesta corta a esta pregunta, son mis animales favoritos 
-              junto con los tiburones desde que tengo uso de razón, y cuanto más aprendía de ellos más me 
+              junto con los tiburones desde que tengo uso de raz&oacute;n, y cuanto m&aacute;s aprendia de ellos m&aacute;s me 
               fascinaban y sobre todo me fascinaba el hecho de que fueran tan diferentes a los humanos.</p>
           </article>
         </div>
       </section>
 
-
-
     </main>
 
-    <footer class="footer">blog personal · cillian</footer>
+    <footer class="footer">blog personal &middot; cillian</footer>
 
   </div>
 
