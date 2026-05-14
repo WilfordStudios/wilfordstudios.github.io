@@ -22,6 +22,11 @@ const MEDIA = {
     fallbackUrl:   'https://serializd.com/user/Wilford_Studios',
     refreshMs:     120000,
   },
+  game: {
+    backloggdUser: 'Wilford_Studios',
+    fallbackUrl:   'https://www.backloggd.com/u/Wilford_Studios',
+    refreshMs:     300000,
+  },
 };
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
@@ -183,48 +188,99 @@ async function fetchFilmCard() {
   setMediaCard('film', { title, coverUrl, href });
 }
 
-// ─── Media Cards — Serializd via JSON API ────────────────────────────────────
+// ─── Media Cards — Serializd via RSS→JSON ────────────────────────────────────
 
 async function fetchSeriesCard() {
   const { serializdUser, fallbackUrl } = MEDIA.series;
 
-  // Serializd has no RSS. Use their public JSON API (same one the mobile app uses).
-  // The diary endpoint returns recent diary entries with showName and posterPath.
-  const apiUrl = `https://www.serializd.com/api/user/${serializdUser}/diary`;
+  // Serializd exposes an RSS feed of recent activity
+  const rssUrl = `https://www.serializd.com/rss/user/${serializdUser}`;
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=1`;
 
   const res = await fetch(apiUrl);
-  if (!res.ok) throw new Error('Serializd API error');
+  if (!res.ok) throw new Error('Serializd RSS fetch error');
 
   const data = await res.json();
+  if (data.status !== 'ok' || !data.items?.length) throw new Error('No Serializd items');
 
-  // Response shape: { diaryEntries: [ { showName, showId, posterPath, ... }, ... ] }
-  const entries = data?.diaryEntries ?? data?.diary ?? [];
-  if (!entries.length) throw new Error('No Serializd diary entries');
+  const item = data.items[0];
 
-  const entry = entries[0];
+  // Title: strip episode info if present — "Show Name - S01E01" → "Show Name"
+  const rawTitle = item.title || '—';
+  const title = rawTitle.replace(/\s[-–]\s+S\d+E\d+.*$/i, '').trim() || rawTitle;
 
-  const title    = entry.showName || '—';
-  const showId   = entry.showId;
-  // posterPath is a TMDB relative path like "/abc123.jpg"
-  const coverUrl = entry.posterPath
-    ? `https://image.tmdb.org/t/p/w300${entry.posterPath}`
-    : '';
-  const href = showId
-    ? `https://www.serializd.com/show/${showId}`
-    : fallbackUrl;
+  // Poster: grab from thumbnail or first <img> in description
+  const coverUrl = item.thumbnail || extractImgSrc(item.description || '');
 
-  // Activate the card (remove inactive/placeholder state)
+  // Activate the card (remove inactive state)
   const card = document.getElementById('mc-series');
+  if (card) {
+    card.classList.remove('mc-inactive');
+    const pendingEl = card.querySelector('.mc-pending');
+    if (pendingEl) pendingEl.classList.remove('mc-pending');
+  }
+
+  setMediaCard('series', {
+    title,
+    coverUrl,
+    href: item.link || fallbackUrl,
+  });
+}
+
+// ─── Media Cards — Backloggd via HTML scraping ───────────────────────────────
+
+async function fetchGameCard() {
+  const { backloggdUser, fallbackUrl } = MEDIA.game;
+
+  // Backloggd has no RSS or public API — scrape the diary page via allorigins.win.
+  // The diary page lists recently-logged games sorted by date, newest first.
+  const pageUrl  = `https://www.backloggd.com/u/${backloggdUser}/games/diary/`;
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`;
+
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error('Backloggd fetch error');
+
+  const html   = await res.text();
+  const parser = new DOMParser();
+  const doc    = parser.parseFromString(html, 'text/html');
+
+  // Each game card is a <div class="game-cover"> (or an <a> wrapping it).
+  // The cover image is an <img> whose src points to images.igdb.com.
+  // Titles are in a <div class="game-text-centered"> or the img alt attribute.
+  const coverImg = doc.querySelector('.game-cover img, .cover-img, [class*="game"] img[src*="igdb"]');
+
+  let coverUrl = '';
+  let title    = '—';
+  let href     = fallbackUrl;
+
+  if (coverImg) {
+    // Use the largest available size: replace "t_cover_big" with "t_cover_big_2x" if possible
+    const rawSrc = coverImg.getAttribute('src') || coverImg.getAttribute('data-src') || '';
+    coverUrl = rawSrc.replace('t_cover_small', 't_cover_big').replace('t_thumb', 't_cover_big');
+    title    = coverImg.getAttribute('alt') || '—';
+
+    // Walk up to find an anchor link to the game page
+    const anchor = coverImg.closest('a[href]');
+    if (anchor) {
+      const anchorHref = anchor.getAttribute('href') || '';
+      href = anchorHref.startsWith('http') ? anchorHref : `https://www.backloggd.com${anchorHref}`;
+    }
+  }
+
+  if (!coverUrl) throw new Error('No game cover found');
+
+  // Activate the card
+  const card = document.getElementById('mc-game');
   if (card) card.classList.remove('mc-inactive');
 
-  setMediaCard('series', { title, coverUrl, href });
+  setMediaCard('game', { title, coverUrl, href });
 }
 
 // ─── Media Cards — Init ───────────────────────────────────────────────────────
 
 function initMediaCards() {
   // Mark active cards as loading
-  ['music', 'film', 'series'].forEach(id => {
+  ['music', 'film'].forEach(id => {
     const card = document.getElementById(`mc-${id}`);
     if (card) card.dataset.state = 'loading';
   });
@@ -235,21 +291,24 @@ function initMediaCards() {
   const tryFilm   = () => fetchFilmCard().catch(() =>
     setMediaCard('film',   { title: 'letterboxd', coverUrl: '', href: MEDIA.film.fallbackUrl })
   );
-  const trySeries = () => fetchSeriesCard().catch(() => {
-    const card = document.getElementById('mc-series');
-    if (card) card.classList.remove('mc-inactive');
-    setMediaCard('series', { title: 'serializd',  coverUrl: '', href: MEDIA.series.fallbackUrl });
-  });
+  const trySeries = () => fetchSeriesCard().catch(() =>
+    setMediaCard('series', { title: 'serializd',  coverUrl: '', href: MEDIA.series.fallbackUrl })
+  );
+  const tryGame   = () => fetchGameCard().catch(() =>
+    setMediaCard('game',   { title: 'backloggd',  coverUrl: '', href: MEDIA.game.fallbackUrl })
+  );
 
   // Initial fetch
   tryMusic();
   tryFilm();
   trySeries();
+  tryGame();
 
   // Polling intervals
   setInterval(tryMusic,  MEDIA.music.refreshMs);
   setInterval(tryFilm,   MEDIA.film.refreshMs);
   setInterval(trySeries, MEDIA.series.refreshMs);
+  setInterval(tryGame,   MEDIA.game.refreshMs);
 
   // Refresh on tab visibility restore
   document.addEventListener('visibilitychange', () => {
@@ -257,6 +316,7 @@ function initMediaCards() {
       tryMusic();
       tryFilm();
       trySeries();
+      tryGame();
     }
   });
 }
