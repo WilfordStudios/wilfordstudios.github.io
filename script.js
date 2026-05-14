@@ -3,131 +3,23 @@ const root = document.documentElement;
 const canvas = document.getElementById('bg-canvas');
 const ctx = canvas?.getContext('2d');
 
-const NOW_PLAYING_CONFIG = {
-  provider: 'lastfm',
-  lastfmUser: 'Wilford_Studios',
-  lastfmApiKey: 'f13d8b297568b04f7cfa22684044b6bd',
-  customEndpoint: '',
-  refreshMs: 15000,
-  fallback: {
-    title: 'spotify · mi perfil',
-    artist: '',
-    url: 'https://open.spotify.com/user/r94decpncosw8hogydivy5ma3',
-  },
-};
-
 const MEDIA_CONFIG = {
   spotify: {
-    user: 'Wilford_Studios',
     api: 'https://lastfm-last-played.biancarosa.com.br/Wilford_Studios/latest-song'
   },
-
   letterboxd: {
     rss: 'https://letterboxd.com/Wilford_Studios/rss/'
   },
-
   serializd: {
     rss: 'https://www.serializd.com/rss/Wilford_Studios'
   },
-
   backloggd: {
     rss: 'https://www.backloggd.com/u/Wilford_Studios/rss/'
   },
-
   comics: {
     rss: 'https://leagueofcomicgeeks.com/profile/Wilford_Studios/rss'
   }
 };
-
-function setMediaCard(prefix, data) {
-}
-
-function extractImage(html) {
-  const match = html.match(/<img[^>]+src="([^"]+)"/i);
-  return match ? match[1] : '';
-}
-
-async function fetchLetterboxd() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.letterboxd.rss);
-    const item = data.items?.[0];
-
-    if (!item) return;
-
-    setMediaCard('letterboxd', {
-      title: item.title,
-      subtitle: 'Letterboxd',
-      image: extractImage(item.description)
-    });
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function fetchSerializd() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.serializd.rss);
-    const item = data.items?.[0];
-
-    if (!item) return;
-
-    setMediaCard('serializd', {
-      title: item.title,
-      subtitle: 'Serializd',
-      image: extractImage(item.description)
-    });
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function fetchBackloggd() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.backloggd.rss);
-    const item = data.items?.[0];
-
-    if (!item) return;
-
-    setMediaCard('backloggd', {
-      title: item.title,
-      subtitle: 'Backloggd',
-      image: extractImage(item.description)
-    });
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function fetchComics() {
-  try {
-    const data = await fetchRSS(MEDIA_CONFIG.comics.rss);
-    const item = data.items?.[0];
-
-    if (!item) return;
-
-    setMediaCard('comic', {
-      title: item.title,
-      subtitle: 'League of Comic Geeks',
-      image: extractImage(item.description)
-    });
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function loadMediaCards() {
-  await Promise.all([
-    fetchSpotify(),
-    fetchLetterboxd(),
-    fetchSerializd(),
-    fetchBackloggd(),
-    fetchComics()
-  ]);
-}
 
 let pointerX = window.innerWidth / 2;
 let pointerY = window.innerHeight / 2;
@@ -162,152 +54,117 @@ function updateClock() {
   if (clock) clock.textContent = time;
 }
 
-function getLastfmImage(track) {
-  const images = track?.image || [];
-  const image = [...images].reverse().find(item => item['#text']);
-  return image?.['#text'] || '';
+async function fetchRSS(url) {
+  const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
+  const response = await fetch(api);
+  return response.json();
 }
 
-function normalizeLastfmTrack(track) {
-  if (!track) return null;
-
-  const isPlaying = track['@attr']?.nowplaying === 'true';
-  return {
-    title: track.name || NOW_PLAYING_CONFIG.fallback.title,
-    artist: track.artist?.['#text'] || 'spotify',
-    album: track.album?.['#text'] || '',
-    albumArt: getLastfmImage(track),
-    url: track.url || NOW_PLAYING_CONFIG.fallback.url,
-    isPlaying,
-  };
+function extractImage(html) {
+  if (!html) return '';
+  const match = html.match(/<img[^>]+src="([^"]+)"/i);
+  return match ? match[1] : '';
 }
 
-function normalizeEndpointTrack(data) {
-  if (!data) return null;
+function setMediaCard(prefix, data) {
+  const title = document.getElementById(`${prefix}-title`);
+  const subtitle = document.getElementById(`${prefix}-subtitle`);
+  const image = document.getElementById(`${prefix}-image`);
 
-  return {
-    title: data.title || data.name || NOW_PLAYING_CONFIG.fallback.title,
-    artist: data.artist || data.artists || NOW_PLAYING_CONFIG.fallback.artist,
-    album: data.album || '',
-    albumArt: data.albumArt || data.image || data.cover || '',
-    url: data.url || data.songUrl || NOW_PLAYING_CONFIG.fallback.url,
-    isPlaying: Boolean(data.isPlaying ?? data.playing),
-  };
+  if (!title || !subtitle || !image) return;
+
+  title.textContent = data.title || 'Sin datos';
+  subtitle.textContent = data.subtitle || '';
+  image.src = data.image || 'assets/profile-durin.jpg';
 }
 
-async function fetchLastfmNowPlaying() {
-  const { lastfmUser, lastfmApiKey } = NOW_PLAYING_CONFIG;
-  if (!lastfmUser || !lastfmApiKey) return null;
-
-  const params = new URLSearchParams({
-    method: 'user.getrecenttracks',
-    user: lastfmUser,
-    api_key: lastfmApiKey,
-    format: 'json',
-    limit: '1',
-  });
-
-  const response = await fetch(`https://ws.audioscrobbler.com/2.0/?${params}`);
-  if (!response.ok) throw new Error('No se pudo leer Last.fm');
-
-  const data = await response.json();
-  const track = data?.recenttracks?.track;
-  return normalizeLastfmTrack(Array.isArray(track) ? track[0] : track);
-}
-
-async function fetchEndpointNowPlaying() {
-  if (!NOW_PLAYING_CONFIG.customEndpoint) return null;
-
-  const response = await fetch(NOW_PLAYING_CONFIG.customEndpoint, { cache: 'no-store' });
-  if (!response.ok) throw new Error('No se pudo leer el endpoint de now playing');
-  return normalizeEndpointTrack(await response.json());
-}
-
-function setCover(coverEl, albumArt) {
-  coverEl.textContent = '';
-
-  if (!albumArt) {
-    coverEl.textContent = '♫';
-    coverEl.classList.remove('has-cover');
-    return;
-  }
-
-  const image = document.createElement('img');
-  image.src = albumArt;
-  image.alt = '';
-  image.loading = 'lazy';
-  coverEl.appendChild(image);
-  coverEl.classList.add('has-cover');
-}
-
-function updateNowPlayingWidget(track, status = 'config') {
-  const widget = document.querySelector('.now-playing');
-  const label = document.querySelector('.np-label');
-  const trackEl = document.querySelector('.np-track');
-  const artistEl = document.getElementById('np-artist');
-  const coverEl = document.getElementById('np-cover');
-  const coverLink = document.querySelector('.np-cover-link');
-
-  if (!widget || !label || !trackEl || !artistEl || !coverEl) return;
-
-  const safeTrack = track || NOW_PLAYING_CONFIG.fallback;
-  const isPlaying = Boolean(safeTrack.isPlaying);
-
-  widget.dataset.state = isPlaying ? 'playing' : status;
-  label.innerHTML = `<span class="np-dot" aria-hidden="true"></span>${isPlaying ? 'escuchando ahora' : status === 'recent' ? 'último scrobble' : 'spotify status'}`;
-  trackEl.textContent = safeTrack.title || NOW_PLAYING_CONFIG.fallback.title;
-  artistEl.textContent = safeTrack.artist || NOW_PLAYING_CONFIG.fallback.artist;
-
-  if ('href' in trackEl) trackEl.href = safeTrack.url || NOW_PLAYING_CONFIG.fallback.url;
-  if (coverLink) coverLink.href = safeTrack.url || NOW_PLAYING_CONFIG.fallback.url;
-
-  setCover(coverEl, safeTrack.albumArt);
-}
-
-async function refreshNowPlaying() {
+async function fetchSpotify() {
   try {
-    const track = NOW_PLAYING_CONFIG.customEndpoint
-      ? await fetchEndpointNowPlaying()
-      : await fetchLastfmNowPlaying();
+    const response = await fetch(MEDIA_CONFIG.spotify.api);
+    const data = await response.json();
 
-    if (!track) {
-      updateNowPlayingWidget(NOW_PLAYING_CONFIG.fallback, 'config');
-      return;
-    }
-
-    updateNowPlayingWidget(track, track.isPlaying ? 'playing' : 'recent');
+    setMediaCard('spotify', {
+      title: data.track?.name || 'Sin reproducción',
+      subtitle: data.track?.artist['#text'] || 'Spotify',
+      image: data.track?.image?.['#text'] || ''
+    });
   } catch (error) {
-    updateNowPlayingWidget({
-      ...NOW_PLAYING_CONFIG.fallback,
-      artist: 'no pude leer el tracking ahora',
-    }, 'error');
+    console.error(error);
   }
 }
 
-function startNowPlayingInterval() {
-  if (nowPlayingInterval) clearInterval(nowPlayingInterval);
-  nowPlayingInterval = setInterval(refreshNowPlaying, NOW_PLAYING_CONFIG.refreshMs);
+async function fetchLetterboxd() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.letterboxd.rss);
+    const item = data.items?.[0];
+    if (!item) return;
+
+    setMediaCard('letterboxd', {
+      title: item.title,
+      subtitle: 'Letterboxd',
+      image: extractImage(item.description)
+    });
+  } catch (error) {
+    console.error(error);
+  }
 }
 
-function initNowPlayingTracking() {
-  updateNowPlayingWidget(NOW_PLAYING_CONFIG.fallback, 'config');
+async function fetchSerializd() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.serializd.rss);
+    const item = data.items?.[0];
+    if (!item) return;
 
-  if (!NOW_PLAYING_CONFIG.customEndpoint && (!NOW_PLAYING_CONFIG.lastfmUser || !NOW_PLAYING_CONFIG.lastfmApiKey)) {
-    return;
+    setMediaCard('serializd', {
+      title: item.title,
+      subtitle: 'Serializd',
+      image: extractImage(item.description)
+    });
+  } catch (error) {
+    console.error(error);
   }
+}
 
-  refreshNowPlaying();
-  startNowPlayingInterval();
+async function fetchBackloggd() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.backloggd.rss);
+    const item = data.items?.[0];
+    if (!item) return;
 
-  // Refresh immediately when the tab becomes visible again
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      refreshNowPlaying();
-      startNowPlayingInterval();
-    } else {
-      if (nowPlayingInterval) clearInterval(nowPlayingInterval);
-    }
-  });
+    setMediaCard('backloggd', {
+      title: item.title,
+      subtitle: 'Backloggd',
+      image: extractImage(item.description)
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function fetchComics() {
+  try {
+    const data = await fetchRSS(MEDIA_CONFIG.comics.rss);
+    const item = data.items?.[0];
+    if (!item) return;
+
+    setMediaCard('comic', {
+      title: item.title,
+      subtitle: 'League of Comic Geeks',
+      image: extractImage(item.description)
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function loadMediaCards() {
+  await Promise.all([
+    fetchSpotify(),
+    fetchLetterboxd(),
+    fetchSerializd(),
+    fetchBackloggd(),
+    fetchComics()
+  ]);
 }
 
 function setPointerPosition(x, y) {
