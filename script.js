@@ -17,6 +17,11 @@ const MEDIA = {
     fallbackUrl:    'https://letterboxd.com/Wilford_Studios',
     refreshMs:      120000,
   },
+  series: {
+    serializdUser: 'Wilford_Studios',
+    fallbackUrl:   'https://serializd.com/user/Wilford_Studios',
+    refreshMs:     120000,
+  },
 };
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
@@ -69,6 +74,9 @@ function setMediaCard(id, { title, coverUrl, href, isPlaying = false }) {
   // Link
   if (linkEl && href) linkEl.href = href;
 
+  const phIcons = { music: '♫', film: 'Lb', series: 'Sz', game: 'Bg', comic: 'CG' };
+  const phIcon  = phIcons[id] || '?';
+
   // Cover
   if (coverEl) {
     coverEl.innerHTML = '';
@@ -82,14 +90,14 @@ function setMediaCard(id, { title, coverUrl, href, isPlaying = false }) {
         coverEl.innerHTML = '';
         const ph = document.createElement('span');
         ph.className = 'mc-ph-icon';
-        ph.textContent = id === 'music' ? '♫' : 'Lb';
+        ph.textContent = phIcon;
         coverEl.appendChild(ph);
       };
       coverEl.appendChild(img);
     } else {
       const ph = document.createElement('span');
       ph.className  = 'mc-ph-icon';
-      ph.textContent = id === 'music' ? '♫' : 'Lb';
+      ph.textContent = phIcon;
       coverEl.appendChild(ph);
     }
   }
@@ -163,35 +171,80 @@ async function fetchFilmCard() {
   });
 }
 
+// ─── Media Cards — Serializd via RSS→JSON ────────────────────────────────────
+
+async function fetchSeriesCard() {
+  const { serializdUser, fallbackUrl } = MEDIA.series;
+
+  // Serializd exposes an RSS feed of recent activity
+  const rssUrl = `https://www.serializd.com/rss/user/${serializdUser}`;
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=1`;
+
+  const res = await fetch(apiUrl);
+  if (!res.ok) throw new Error('Serializd RSS fetch error');
+
+  const data = await res.json();
+  if (data.status !== 'ok' || !data.items?.length) throw new Error('No Serializd items');
+
+  const item = data.items[0];
+
+  // Title: strip episode info if present — "Show Name - S01E01" → "Show Name"
+  const rawTitle = item.title || '—';
+  const title = rawTitle.replace(/\s[-–]\s+S\d+E\d+.*$/i, '').trim() || rawTitle;
+
+  // Poster: grab from thumbnail or first <img> in description
+  const coverUrl = item.thumbnail || extractImgSrc(item.description || '');
+
+  // Activate the card (remove inactive state)
+  const card = document.getElementById('mc-series');
+  if (card) {
+    card.classList.remove('mc-inactive');
+    const pendingEl = card.querySelector('.mc-pending');
+    if (pendingEl) pendingEl.classList.remove('mc-pending');
+  }
+
+  setMediaCard('series', {
+    title,
+    coverUrl,
+    href: item.link || fallbackUrl,
+  });
+}
+
 // ─── Media Cards — Init ───────────────────────────────────────────────────────
 
 function initMediaCards() {
   // Mark active cards as loading
-  ['music', 'film'].forEach(id => {
+  ['music', 'film', 'series'].forEach(id => {
     const card = document.getElementById(`mc-${id}`);
     if (card) card.dataset.state = 'loading';
   });
 
-  const tryMusic = () => fetchMusicCard().catch(() =>
-    setMediaCard('music', { title: 'spotify', coverUrl: '', href: MEDIA.music.fallbackUrl })
+  const tryMusic  = () => fetchMusicCard().catch(() =>
+    setMediaCard('music',  { title: 'spotify',    coverUrl: '', href: MEDIA.music.fallbackUrl })
   );
-  const tryFilm  = () => fetchFilmCard().catch(() =>
-    setMediaCard('film',  { title: 'letterboxd', coverUrl: '', href: MEDIA.film.fallbackUrl })
+  const tryFilm   = () => fetchFilmCard().catch(() =>
+    setMediaCard('film',   { title: 'letterboxd', coverUrl: '', href: MEDIA.film.fallbackUrl })
+  );
+  const trySeries = () => fetchSeriesCard().catch(() =>
+    setMediaCard('series', { title: 'serializd',  coverUrl: '', href: MEDIA.series.fallbackUrl })
   );
 
   // Initial fetch
   tryMusic();
   tryFilm();
+  trySeries();
 
   // Polling intervals
-  setInterval(tryMusic, MEDIA.music.refreshMs);
-  setInterval(tryFilm,  MEDIA.film.refreshMs);
+  setInterval(tryMusic,  MEDIA.music.refreshMs);
+  setInterval(tryFilm,   MEDIA.film.refreshMs);
+  setInterval(trySeries, MEDIA.series.refreshMs);
 
   // Refresh on tab visibility restore
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       tryMusic();
       tryFilm();
+      trySeries();
     }
   });
 }
