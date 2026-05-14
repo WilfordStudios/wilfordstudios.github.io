@@ -183,43 +183,41 @@ async function fetchFilmCard() {
   setMediaCard('film', { title, coverUrl, href });
 }
 
-// ─── Media Cards — Serializd via RSS→JSON ────────────────────────────────────
+// ─── Media Cards — Serializd via JSON API ────────────────────────────────────
 
 async function fetchSeriesCard() {
   const { serializdUser, fallbackUrl } = MEDIA.series;
 
-  // Serializd exposes an RSS feed of recent activity
-  const rssUrl = `https://www.serializd.com/rss/user/${serializdUser}`;
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=1`;
+  // Serializd has no RSS. Use their public JSON API (same one the mobile app uses).
+  // The diary endpoint returns recent diary entries with showName and posterPath.
+  const apiUrl = `https://www.serializd.com/api/user/${serializdUser}/diary`;
 
   const res = await fetch(apiUrl);
-  if (!res.ok) throw new Error('Serializd RSS fetch error');
+  if (!res.ok) throw new Error('Serializd API error');
 
   const data = await res.json();
-  if (data.status !== 'ok' || !data.items?.length) throw new Error('No Serializd items');
 
-  const item = data.items[0];
+  // Response shape: { diaryEntries: [ { showName, showId, posterPath, ... }, ... ] }
+  const entries = data?.diaryEntries ?? data?.diary ?? [];
+  if (!entries.length) throw new Error('No Serializd diary entries');
 
-  // Title: strip episode info if present — "Show Name - S01E01" → "Show Name"
-  const rawTitle = item.title || '—';
-  const title = rawTitle.replace(/\s[-–]\s+S\d+E\d+.*$/i, '').trim() || rawTitle;
+  const entry = entries[0];
 
-  // Poster: grab from thumbnail or first <img> in description
-  const coverUrl = item.thumbnail || extractImgSrc(item.description || '');
+  const title    = entry.showName || '—';
+  const showId   = entry.showId;
+  // posterPath is a TMDB relative path like "/abc123.jpg"
+  const coverUrl = entry.posterPath
+    ? `https://image.tmdb.org/t/p/w300${entry.posterPath}`
+    : '';
+  const href = showId
+    ? `https://www.serializd.com/show/${showId}`
+    : fallbackUrl;
 
-  // Activate the card (remove inactive state)
+  // Activate the card (remove inactive/placeholder state)
   const card = document.getElementById('mc-series');
-  if (card) {
-    card.classList.remove('mc-inactive');
-    const pendingEl = card.querySelector('.mc-pending');
-    if (pendingEl) pendingEl.classList.remove('mc-pending');
-  }
+  if (card) card.classList.remove('mc-inactive');
 
-  setMediaCard('series', {
-    title,
-    coverUrl,
-    href: item.link || fallbackUrl,
-  });
+  setMediaCard('series', { title, coverUrl, href });
 }
 
 // ─── Media Cards — Init ───────────────────────────────────────────────────────
@@ -237,9 +235,11 @@ function initMediaCards() {
   const tryFilm   = () => fetchFilmCard().catch(() =>
     setMediaCard('film',   { title: 'letterboxd', coverUrl: '', href: MEDIA.film.fallbackUrl })
   );
-  const trySeries = () => fetchSeriesCard().catch(() =>
-    setMediaCard('series', { title: 'serializd',  coverUrl: '', href: MEDIA.series.fallbackUrl })
-  );
+  const trySeries = () => fetchSeriesCard().catch(() => {
+    const card = document.getElementById('mc-series');
+    if (card) card.classList.remove('mc-inactive');
+    setMediaCard('series', { title: 'serializd',  coverUrl: '', href: MEDIA.series.fallbackUrl });
+  });
 
   // Initial fetch
   tryMusic();
