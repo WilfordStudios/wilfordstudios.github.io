@@ -1,33 +1,69 @@
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const root = document.documentElement;
-const canvas = document.getElementById('bg-canvas');
-const ctx = canvas?.getContext('2d');
+// ─── Config ───────────────────────────────────────────────────────────────────
+//
+// SETUP FIREBASE (solo una vez):
+//   1. Ve a https://console.firebase.google.com y crea un proyecto.
+//   2. En el proyecto, entra en "Realtime Database" → "Crear base de datos".
+//   3. Empieza en modo prueba (permite lectura y escritura durante 30 días).
+//      Para uso permanente, pon estas reglas en la pestaña "Reglas":
+//        {
+//          "rules": {
+//            "lastTrack": {
+//              ".read": true,
+//              ".write": true
+//            }
+//          }
+//        }
+//   4. Copia la URL de tu base de datos (algo como
+//      https://TU-PROYECTO-default-rtdb.firebaseio.com)
+//      y pégala en FIREBASE_DB_URL de abajo.
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Media Cards Config ───────────────────────────────────────────────────────
+const FIREBASE_DB_URL = 'https://test-1b021-default-rtdb.europe-west1.firebasedatabase.app';
 
 const MEDIA = {
   music: {
     lastfmUser:   'Wilford_Studios',
     lastfmApiKey: 'f13d8b297568b04f7cfa22684044b6bd',
     fallbackUrl:  'https://open.spotify.com/user/r94decpncosw8hogydivy5ma3',
-    refreshMs:    15000,
-  },
-  film: {
-    letterboxdUser: 'Wilford_Studios',
-    fallbackUrl:    'https://letterboxd.com/Wilford_Studios',
-    refreshMs:      120000,
-  },
-  series: {
-    serializdUser: 'Wilford_Studios',
-    fallbackUrl:   'https://serializd.com/user/Wilford_Studios',
-    refreshMs:     120000,
-  },
-  game: {
-    backloggdUser: 'Wilford_Studios',
-    fallbackUrl:   'https://www.backloggd.com/u/Wilford_Studios',
-    refreshMs:     300000,
+    refreshMs:    1_000, // 1 s — razonable para la API de Last.fm
   },
 };
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const root   = document.documentElement;
+const canvas = document.getElementById('bg-canvas');
+const ctx    = canvas?.getContext('2d');
+
+let wasPlaying  = false;   // ¿estaba sonando en el último poll?
+let liveTrack   = null;    // canción que está sonando ahora mismo
+let sharedTrack = null;    // última canción guardada en Firebase
+
+// ─── Firebase helpers ─────────────────────────────────────────────────────────
+
+async function firebaseGet() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/lastTrack.json`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json(); // null si el nodo no existe todavía
+  } catch {
+    return null;
+  }
+}
+
+async function firebasePut(track) {
+  try {
+    await fetch(`${FIREBASE_DB_URL}/lastTrack.json`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(track),
+    });
+  } catch {
+    // silencioso — la próxima vez que pare una canción se volverá a intentar
+  }
+}
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
 
@@ -39,28 +75,8 @@ function switchTab(tab, el) {
   if (el) el.classList.add('active');
 }
 
-// ─── Clock ────────────────────────────────────────────────────────────────────
+// ─── Media card renderer ──────────────────────────────────────────────────────
 
-function updateClock() {
-  const time = new Intl.DateTimeFormat('es-AR', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).format(new Date());
-  const clock = document.getElementById('clock');
-  if (clock) clock.textContent = time;
-}
-
-// ─── Media Cards — helpers ────────────────────────────────────────────────────
-
-/**
- * Populate one media card with live data.
- * @param {string} id        — 'music' | 'film'
- * @param {object} opts
- *   title     {string}
- *   coverUrl  {string}   — full image URL, or '' for no image
- *   href      {string}   — link target
- *   isPlaying {boolean}  — show green dot (music only)
- */
 function setMediaCard(id, { title, coverUrl, href, isPlaying = false }) {
   const card    = document.getElementById(`mc-${id}`);
   const coverEl = document.getElementById(`mc-${id}-cover`);
@@ -69,283 +85,89 @@ function setMediaCard(id, { title, coverUrl, href, isPlaying = false }) {
 
   if (!card) return;
 
-  // State & dot
   card.dataset.state   = 'loaded';
   card.dataset.playing = String(isPlaying);
 
-  // Title
   if (titleEl) titleEl.textContent = title || '—';
-
-  // Link
   if (linkEl && href) linkEl.href = href;
 
-  const phIcons = { music: '♫', film: 'Lb', series: 'Sz', game: 'Bg', comic: 'CG' };
-  const phIcon  = phIcons[id] || '?';
-
-  // Cover
   if (coverEl) {
     coverEl.innerHTML = '';
     if (coverUrl) {
-      const img  = document.createElement('img');
-      img.src    = coverUrl;
-      img.alt    = '';
+      const img   = document.createElement('img');
+      img.src     = coverUrl;
+      img.alt     = '';
       img.loading = 'lazy';
-      // On error fall back to placeholder icon
       img.onerror = () => {
         coverEl.innerHTML = '';
         const ph = document.createElement('span');
-        ph.className = 'mc-ph-icon';
-        ph.textContent = phIcon;
+        ph.className   = 'mc-ph-icon';
+        ph.textContent = '♫';
         coverEl.appendChild(ph);
       };
       coverEl.appendChild(img);
     } else {
       const ph = document.createElement('span');
-      ph.className  = 'mc-ph-icon';
-      ph.textContent = phIcon;
+      ph.className   = 'mc-ph-icon';
+      ph.textContent = '♫';
       coverEl.appendChild(ph);
     }
   }
 }
 
-// ─── Media Cards — Spotify via Last.FM ───────────────────────────────────────
+// ─── Last.fm fetch ────────────────────────────────────────────────────────────
 
 async function fetchMusicCard() {
-  const { lastfmUser, lastfmApiKey, fallbackUrl } = MEDIA.music;
-  const params = new URLSearchParams({
-    method:  'user.getrecenttracks',
-    user:    lastfmUser,
-    api_key: lastfmApiKey,
-    format:  'json',
-    limit:   '1',
-  });
-
-  const res = await fetch(`https://ws.audioscrobbler.com/2.0/?${params}`);
-  if (!res.ok) throw new Error('Last.fm error');
-
-  const data  = await res.json();
-  const track = data?.recenttracks?.track;
-  const t     = Array.isArray(track) ? track[0] : track;
-  if (!t) return;
-
-  const isPlaying = t['@attr']?.nowplaying === 'true';
-  const images    = t?.image || [];
-  const coverUrl  = [...images].reverse().find(i => i['#text'])?.['#text'] || '';
-
-  setMediaCard('music', {
-    title:     t.name || '—',
-    coverUrl,
-    href:      t.url  || fallbackUrl,
-    isPlaying,
-  });
+  const track = await firebaseGet();
+  if (!track) return;
+  setMediaCard('music', { ...track, isPlaying: track.isPlaying ?? false });
 }
 
-// ─── Media Cards — Letterboxd via RSS→JSON ───────────────────────────────────
+// ─── Music card — init ────────────────────────────────────────────────────────
 
-function extractImgSrc(html) {
-  if (!html) return '';
-  const m = html.match(/<img[^>]+src="([^"]+)"/i);
-  return m?.[1] || '';
-}
+async function initMusicCard() {
+  const card = document.getElementById('mc-music');
+  if (card) card.dataset.state = 'loading';
 
-function cleanLetterboxdTitle(raw) {
-  if (!raw) return '—';
-  // "The Dark Knight, 2008 - ★★★★★" → "The Dark Knight"
-  return raw.replace(/,\s*\d{4}.*$/, '').trim();
-}
-
-async function fetchFilmCard() {
-  const { letterboxdUser, fallbackUrl } = MEDIA.film;
-  const rssUrl    = `https://letterboxd.com/${letterboxdUser}/rss/`;
-
-  // Fetch the raw RSS XML via a CORS proxy and parse it ourselves.
-  // rss2json often strips or loses the thumbnail; the img is always in <description>.
-  const proxyUrl  = `https://corsproxy.io/?url=${encodeURIComponent(rssUrl)}`;
-  const res       = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('RSS fetch error');
-
-  const xmlText = await res.text();
-  const parser  = new DOMParser();
-  const doc     = parser.parseFromString(xmlText, 'application/xml');
-
-  const items = Array.from(doc.querySelectorAll('item'));
-  if (!items.length) throw new Error('No Letterboxd items');
-
-  // Prefer diary entries (they have <letterboxd:filmTitle>)
-  const item = items.find(i => i.getElementsByTagNameNS('*', 'filmTitle').length > 0) || items[0];
-
-  // Title: use <letterboxd:filmTitle> when available, else strip year/rating from <title>
-  const filmTitleEl = item.getElementsByTagNameNS('*', 'filmTitle')[0];
-  const rawTitle    = item.querySelector('title')?.textContent || '';
-  const title       = filmTitleEl?.textContent?.trim() || cleanLetterboxdTitle(rawTitle);
-
-  // Poster: always inside the CDATA <description> as an <img src="...">
-  const description = item.querySelector('description')?.textContent || '';
-  const coverUrl    = extractImgSrc(description);
-
-  const href = item.querySelector('link')?.textContent?.trim() || fallbackUrl;
-
-  setMediaCard('film', { title, coverUrl, href });
-}
-
-// ─── Media Cards — Serializd via RSS→JSON ────────────────────────────────────
-
-async function fetchSeriesCard() {
-  const { serializdUser, fallbackUrl } = MEDIA.series;
-
-  // Serializd exposes an RSS feed of recent activity
-  const rssUrl = `https://www.serializd.com/rss/user/${serializdUser}`;
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=1`;
-
-  const res = await fetch(apiUrl);
-  if (!res.ok) throw new Error('Serializd RSS fetch error');
-
-  const data = await res.json();
-  if (data.status !== 'ok' || !data.items?.length) throw new Error('No Serializd items');
-
-  const item = data.items[0];
-
-  // Title: strip episode info if present — "Show Name - S01E01" → "Show Name"
-  const rawTitle = item.title || '—';
-  const title = rawTitle.replace(/\s[-–]\s+S\d+E\d+.*$/i, '').trim() || rawTitle;
-
-  // Poster: grab from thumbnail or first <img> in description
-  const coverUrl = item.thumbnail || extractImgSrc(item.description || '');
-
-  // Activate the card (remove inactive state)
-  const card = document.getElementById('mc-series');
-  if (card) {
-    card.classList.remove('mc-inactive');
-    const pendingEl = card.querySelector('.mc-pending');
-    if (pendingEl) pendingEl.classList.remove('mc-pending');
+  // Cargar desde Firebase primero para que los visitantes vean algo de inmediato
+  sharedTrack = await firebaseGet();
+  if (sharedTrack) {
+    setMediaCard('music', { ...sharedTrack, isPlaying: false });
   }
 
-  setMediaCard('series', {
-    title,
-    coverUrl,
-    href: item.link || fallbackUrl,
-  });
-}
+  // Función de polling con fallback
+  const poll = () =>
+    fetchMusicCard().catch(() => {
+      const fallback = sharedTrack;
+      setMediaCard('music',
+        fallback
+          ? { ...fallback, isPlaying: false }
+          : { title: 'spotify', coverUrl: '', href: MEDIA.music.fallbackUrl }
+      );
+    });
 
-// ─── Media Cards — Backloggd via HTML scraping ───────────────────────────────
-
-async function fetchGameCard() {
-  const { backloggdUser, fallbackUrl } = MEDIA.game;
-
-  // Backloggd has no RSS or public API — scrape the diary page via allorigins.win.
-  // The diary page lists recently-logged games sorted by date, newest first.
-  const pageUrl  = `https://www.backloggd.com/u/${backloggdUser}/games/diary/`;
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`;
-
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('Backloggd fetch error');
-
-  const html   = await res.text();
-  const parser = new DOMParser();
-  const doc    = parser.parseFromString(html, 'text/html');
-
-  // Each game card is a <div class="game-cover"> (or an <a> wrapping it).
-  // The cover image is an <img> whose src points to images.igdb.com.
-  // Titles are in a <div class="game-text-centered"> or the img alt attribute.
-  const coverImg = doc.querySelector('.game-cover img, .cover-img, [class*="game"] img[src*="igdb"]');
-
-  let coverUrl = '';
-  let title    = '—';
-  let href     = fallbackUrl;
-
-  if (coverImg) {
-    // Use the largest available size: replace "t_cover_big" with "t_cover_big_2x" if possible
-    const rawSrc = coverImg.getAttribute('src') || coverImg.getAttribute('data-src') || '';
-    coverUrl = rawSrc.replace('t_cover_small', 't_cover_big').replace('t_thumb', 't_cover_big');
-    title    = coverImg.getAttribute('alt') || '—';
-
-    // Walk up to find an anchor link to the game page
-    const anchor = coverImg.closest('a[href]');
-    if (anchor) {
-      const anchorHref = anchor.getAttribute('href') || '';
-      href = anchorHref.startsWith('http') ? anchorHref : `https://www.backloggd.com${anchorHref}`;
-    }
-  }
-
-  if (!coverUrl) throw new Error('No game cover found');
-
-  // Activate the card
-  const card = document.getElementById('mc-game');
-  if (card) card.classList.remove('mc-inactive');
-
-  setMediaCard('game', { title, coverUrl, href });
-}
-
-// ─── Media Cards — Init ───────────────────────────────────────────────────────
-
-function initMediaCards() {
-  // Mark active cards as loading
-  ['music', 'film'].forEach(id => {
-    const card = document.getElementById(`mc-${id}`);
-    if (card) card.dataset.state = 'loading';
-  });
-
-  const tryMusic  = () => fetchMusicCard().catch(() =>
-    setMediaCard('music',  { title: 'spotify',    coverUrl: '', href: MEDIA.music.fallbackUrl })
-  );
-  const tryFilm   = () => fetchFilmCard().catch(() =>
-    setMediaCard('film',   { title: 'letterboxd', coverUrl: '', href: MEDIA.film.fallbackUrl })
-  );
-  const trySeries = () => fetchSeriesCard().catch(() =>
-    setMediaCard('series', { title: 'serializd',  coverUrl: '', href: MEDIA.series.fallbackUrl })
-  );
-  const tryGame   = () => fetchGameCard().catch(() =>
-    setMediaCard('game',   { title: 'backloggd',  coverUrl: '', href: MEDIA.game.fallbackUrl })
-  );
-
-  // Initial fetch
-  tryMusic();
-  tryFilm();
-  trySeries();
-  tryGame();
-
-  // Polling intervals
-  setInterval(tryMusic,  MEDIA.music.refreshMs);
-  setInterval(tryFilm,   MEDIA.film.refreshMs);
-  setInterval(trySeries, MEDIA.series.refreshMs);
-  setInterval(tryGame,   MEDIA.game.refreshMs);
-
-  // Refresh on tab visibility restore
+  poll();
+  setInterval(poll, MEDIA.music.refreshMs);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      tryMusic();
-      tryFilm();
-      trySeries();
-      tryGame();
-    }
+    if (!document.hidden) poll();
   });
 }
 
-// ─── Card 3D tilt interactions ────────────────────────────────────────────────
-
-let pointerX = window.innerWidth  / 2;
-let pointerY = window.innerHeight / 2;
-
-function setPointerPosition(x, y) {
-  pointerX = x;
-  pointerY = y;
-  root.style.setProperty('--mouse-x', `${x}px`);
-  root.style.setProperty('--mouse-y', `${y}px`);
-}
+// ─── 3D tilt en cards ─────────────────────────────────────────────────────────
 
 function bindCardInteractions() {
   document.querySelectorAll('.glass-card').forEach(card => {
     card.addEventListener('pointermove', event => {
       const rect = card.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      const x  = event.clientX - rect.left;
+      const y  = event.clientY - rect.top;
       const px = x / rect.width  - 0.5;
       const py = y / rect.height - 0.5;
 
       card.style.setProperty('--card-x', `${x}px`);
       card.style.setProperty('--card-y', `${y}px`);
 
-      if (!prefersReducedMotion && card.matches('a, article, .media-card')) {
+      if (!prefersReducedMotion) {
         card.style.transform =
           `translateY(-2px) rotateX(${-py * 2.8}deg) rotateY(${px * 3.2}deg)`;
       }
@@ -359,10 +181,12 @@ function bindCardInteractions() {
   });
 }
 
-// ─── Particle background ──────────────────────────────────────────────────────
+// ─── Fondo de partículas ──────────────────────────────────────────────────────
 
 let particles      = [];
 let animationFrame = null;
+let pointerX       = window.innerWidth  / 2;
+let pointerY       = window.innerHeight / 2;
 
 function resizeCanvas() {
   if (!canvas || !ctx) return;
@@ -399,6 +223,7 @@ function drawBackground() {
     if (p.x > window.innerWidth  + 10) p.x = -10;
     if (p.y < -10) p.y = window.innerHeight + 10;
     if (p.y > window.innerHeight + 10) p.y = -10;
+
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(188,218,230,${p.alpha})`;
@@ -432,14 +257,21 @@ function initBackground() {
 
 // ─── Pointer tracking ─────────────────────────────────────────────────────────
 
-document.addEventListener('pointermove', e => setPointerPosition(e.clientX, e.clientY), { passive: true });
-document.addEventListener('pointerleave', () => setPointerPosition(window.innerWidth / 2, window.innerHeight / 2));
+document.addEventListener('pointermove', e => {
+  pointerX = e.clientX;
+  pointerY = e.clientY;
+  root.style.setProperty('--mouse-x', `${e.clientX}px`);
+  root.style.setProperty('--mouse-y', `${e.clientY}px`);
+}, { passive: true });
+
+document.addEventListener('pointerleave', () => {
+  pointerX = window.innerWidth  / 2;
+  pointerY = window.innerHeight / 2;
+});
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
-updateClock();
-setInterval(updateClock, 1000);
-initMediaCards();
+initMusicCard();
 bindCardInteractions();
 initBackground();
 
