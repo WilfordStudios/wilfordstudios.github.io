@@ -1,0 +1,71 @@
+name: Update Backloggd data
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # every 4 hours
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scrape Backloggd
+        run: |
+          python3 - <<'EOF'
+          import urllib.request, json, re, sys
+
+          USER = "Wilford_Studios"
+          URL  = f"https://www.backloggd.com/u/{USER}/games/diary/"
+
+          req = urllib.request.Request(URL, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; site-updater/1.0)"
+          })
+
+          try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+              html = r.read().decode("utf-8", errors="replace")
+          except Exception as e:
+            print(f"Fetch failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
+          # Find first game cover img pointing to igdb
+          img_match = re.search(
+            r'<img[^>]+src="(https://images\.igdb\.com/[^"]+)"[^>]+alt="([^"]*)"',
+            html
+          )
+          if not img_match:
+            print("No cover found in HTML", file=sys.stderr)
+            sys.exit(1)
+
+          raw_src = img_match.group(1)
+          title   = img_match.group(2).strip() or "—"
+
+          # Upgrade to t_cover_big if not already
+          cover_url = re.sub(r"t_\w+", "t_cover_big", raw_src)
+
+          # Find the href of the surrounding <a>
+          # Search backwards from img position for the nearest <a href="/games/...">
+          pos      = img_match.start()
+          pre_html = html[:pos]
+          a_match  = re.findall(r'<a[^>]+href="(/games/[^"]+)"', pre_html)
+          href = ("https://www.backloggd.com" + a_match[-1]) if a_match else f"https://www.backloggd.com/u/{USER}"
+
+          result = {"title": title, "coverUrl": cover_url, "href": href}
+          with open("data/backloggd.json", "w") as f:
+            json.dump(result, f)
+
+          print(f"OK: {title} — {cover_url}")
+          EOF
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/backloggd.json
+          git diff --cached --quiet || git commit -m "chore: update backloggd data"
+          git push
