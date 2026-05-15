@@ -229,51 +229,71 @@ async function fetchSeriesCard() {
 
 // ─── Media Cards — Backloggd via HTML scraping ───────────────────────────────
 
+async function fetchWithTimeout(url, ms = 7000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function scrapeBackloggd(proxyUrl) {
+  const res = await fetchWithTimeout(proxyUrl, 7000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const html = await res.text();
+  const doc  = new DOMParser().parseFromString(html, 'text/html');
+
+  const coverImg = doc.querySelector('.game-cover img, .cover-img, [class*="game"] img[src*="igdb"]');
+  if (!coverImg) throw new Error('No cover img found');
+
+  const rawSrc = coverImg.getAttribute('src') || coverImg.getAttribute('data-src') || '';
+  if (!rawSrc) throw new Error('Empty src');
+
+  const coverUrl   = rawSrc.replace('t_cover_small', 't_cover_big').replace('t_thumb', 't_cover_big');
+  const title      = coverImg.getAttribute('alt') || '—';
+  const anchor     = coverImg.closest('a[href]');
+  const anchorHref = anchor?.getAttribute('href') || '';
+  const href       = anchorHref.startsWith('http') ? anchorHref : `https://www.backloggd.com${anchorHref}`;
+
+  return { title, coverUrl, href };
+}
+
 async function fetchGameCard() {
   const { backloggdUser, fallbackUrl } = MEDIA.game;
+  const pageUrl = `https://www.backloggd.com/u/${backloggdUser}/games/diary/`;
 
-  // Backloggd has no RSS or public API — scrape the diary page via allorigins.win.
-  // The diary page lists recently-logged games sorted by date, newest first.
-  const pageUrl  = `https://www.backloggd.com/u/${backloggdUser}/games/diary/`;
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`;
-
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('Backloggd fetch error');
-
-  const html   = await res.text();
-  const parser = new DOMParser();
-  const doc    = parser.parseFromString(html, 'text/html');
-
-  // Each game card is a <div class="game-cover"> (or an <a> wrapping it).
-  // The cover image is an <img> whose src points to images.igdb.com.
-  // Titles are in a <div class="game-text-centered"> or the img alt attribute.
-  const coverImg = doc.querySelector('.game-cover img, .cover-img, [class*="game"] img[src*="igdb"]');
-
-  let coverUrl = '';
-  let title    = '—';
-  let href     = fallbackUrl;
-
-  if (coverImg) {
-    // Use the largest available size: replace "t_cover_big" with "t_cover_big_2x" if possible
-    const rawSrc = coverImg.getAttribute('src') || coverImg.getAttribute('data-src') || '';
-    coverUrl = rawSrc.replace('t_cover_small', 't_cover_big').replace('t_thumb', 't_cover_big');
-    title    = coverImg.getAttribute('alt') || '—';
-
-    // Walk up to find an anchor link to the game page
-    const anchor = coverImg.closest('a[href]');
-    if (anchor) {
-      const anchorHref = anchor.getAttribute('href') || '';
-      href = anchorHref.startsWith('http') ? anchorHref : `https://www.backloggd.com${anchorHref}`;
-    }
+  // Show cached result immediately while fetching (avoids blank card on slow loads)
+  const cacheKey = 'bl_cache';
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    const card = document.getElementById('mc-game');
+    if (card) card.classList.remove('mc-inactive');
+    setMediaCard('game', JSON.parse(cached));
   }
 
-  if (!coverUrl) throw new Error('No game cover found');
+  // Race two proxies — first valid response wins
+  const proxies = [
+    `https://corsproxy.io/?url=${encodeURIComponent(pageUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`,
+  ];
 
-  // Activate the card
-  const card = document.getElementById('mc-game');
-  if (card) card.classList.remove('mc-inactive');
+  let result = null;
+  await Promise.any(
+    proxies.map(url => scrapeBackloggd(url))
+  ).then(data => { result = data; }).catch(() => {});
 
-  setMediaCard('game', { title, coverUrl, href });
+  if (result) {
+    sessionStorage.setItem(cacheKey, JSON.stringify(result));
+    const card = document.getElementById('mc-game');
+    if (card) card.classList.remove('mc-inactive');
+    setMediaCard('game', result);
+  } else if (!cached) {
+    throw new Error('All proxies failed and no cache');
+  }
+  // If result is null but we had cache, we already showed it — silently accept
 }
 
 // ─── Media Cards — Init ───────────────────────────────────────────────────────
