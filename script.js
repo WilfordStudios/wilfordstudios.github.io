@@ -227,73 +227,24 @@ async function fetchSeriesCard() {
   });
 }
 
-// ─── Media Cards — Backloggd via HTML scraping ───────────────────────────────
-
-async function fetchWithTimeout(url, ms = 7000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, { signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function scrapeBackloggd(proxyUrl) {
-  const res = await fetchWithTimeout(proxyUrl, 7000);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-  const html = await res.text();
-  const doc  = new DOMParser().parseFromString(html, 'text/html');
-
-  const coverImg = doc.querySelector('.game-cover img, .cover-img, [class*="game"] img[src*="igdb"]');
-  if (!coverImg) throw new Error('No cover img found');
-
-  const rawSrc = coverImg.getAttribute('src') || coverImg.getAttribute('data-src') || '';
-  if (!rawSrc) throw new Error('Empty src');
-
-  const coverUrl   = rawSrc.replace('t_cover_small', 't_cover_big').replace('t_thumb', 't_cover_big');
-  const title      = coverImg.getAttribute('alt') || '—';
-  const anchor     = coverImg.closest('a[href]');
-  const anchorHref = anchor?.getAttribute('href') || '';
-  const href       = anchorHref.startsWith('http') ? anchorHref : `https://www.backloggd.com${anchorHref}`;
-
-  return { title, coverUrl, href };
-}
+// ─── Media Cards — Backloggd (served from /data/backloggd.json) ──────────────
+// Data is kept fresh by a GitHub Action (.github/workflows/update-backloggd.yml)
+// that scrapes Backloggd server-side every 4 hours and commits the result.
+// The frontend just reads a tiny JSON with no proxies or scraping needed.
 
 async function fetchGameCard() {
-  const { backloggdUser, fallbackUrl } = MEDIA.game;
-  const pageUrl = `https://www.backloggd.com/u/${backloggdUser}/games/diary/`;
+  const { fallbackUrl } = MEDIA.game;
 
-  // Show cached result immediately while fetching (avoids blank card on slow loads)
-  const cacheKey = 'bl_cache';
-  const cached = sessionStorage.getItem(cacheKey);
-  if (cached) {
-    const card = document.getElementById('mc-game');
-    if (card) card.classList.remove('mc-inactive');
-    setMediaCard('game', JSON.parse(cached));
-  }
+  const res = await fetch('/data/backloggd.json?t=' + Date.now());
+  if (!res.ok) throw new Error('backloggd.json not found');
 
-  // Race two proxies — first valid response wins
-  const proxies = [
-    `https://corsproxy.io/?url=${encodeURIComponent(pageUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`,
-  ];
+  const { title, coverUrl, href } = await res.json();
+  if (!coverUrl) throw new Error('Empty cover in JSON');
 
-  let result = null;
-  await Promise.any(
-    proxies.map(url => scrapeBackloggd(url))
-  ).then(data => { result = data; }).catch(() => {});
+  const card = document.getElementById('mc-game');
+  if (card) card.classList.remove('mc-inactive');
 
-  if (result) {
-    sessionStorage.setItem(cacheKey, JSON.stringify(result));
-    const card = document.getElementById('mc-game');
-    if (card) card.classList.remove('mc-inactive');
-    setMediaCard('game', result);
-  } else if (!cached) {
-    throw new Error('All proxies failed and no cache');
-  }
-  // If result is null but we had cache, we already showed it — silently accept
+  setMediaCard('game', { title, coverUrl, href: href || fallbackUrl });
 }
 
 // ─── Media Cards — Init ───────────────────────────────────────────────────────
