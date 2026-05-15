@@ -227,24 +227,53 @@ async function fetchSeriesCard() {
   });
 }
 
-// ─── Media Cards — Backloggd (served from /data/backloggd.json) ──────────────
-// Data is kept fresh by a GitHub Action (.github/workflows/update-backloggd.yml)
-// that scrapes Backloggd server-side every 4 hours and commits the result.
-// The frontend just reads a tiny JSON with no proxies or scraping needed.
+// ─── Media Cards — Backloggd via HTML scraping ───────────────────────────────
 
 async function fetchGameCard() {
-  const { fallbackUrl } = MEDIA.game;
+  const { backloggdUser, fallbackUrl } = MEDIA.game;
 
-  const res = await fetch('/data/backloggd.json?t=' + Date.now());
-  if (!res.ok) throw new Error('backloggd.json not found');
+  // Backloggd has no RSS or public API — scrape the diary page via allorigins.win.
+  // The diary page lists recently-logged games sorted by date, newest first.
+  const pageUrl  = `https://www.backloggd.com/u/${backloggdUser}/games/diary/`;
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`;
 
-  const { title, coverUrl, href } = await res.json();
-  if (!coverUrl) throw new Error('Empty cover in JSON');
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error('Backloggd fetch error');
 
+  const html   = await res.text();
+  const parser = new DOMParser();
+  const doc    = parser.parseFromString(html, 'text/html');
+
+  // Each game card is a <div class="game-cover"> (or an <a> wrapping it).
+  // The cover image is an <img> whose src points to images.igdb.com.
+  // Titles are in a <div class="game-text-centered"> or the img alt attribute.
+  const coverImg = doc.querySelector('.game-cover img, .cover-img, [class*="game"] img[src*="igdb"]');
+
+  let coverUrl = '';
+  let title    = '—';
+  let href     = fallbackUrl;
+
+  if (coverImg) {
+    // Use the largest available size: replace "t_cover_big" with "t_cover_big_2x" if possible
+    const rawSrc = coverImg.getAttribute('src') || coverImg.getAttribute('data-src') || '';
+    coverUrl = rawSrc.replace('t_cover_small', 't_cover_big').replace('t_thumb', 't_cover_big');
+    title    = coverImg.getAttribute('alt') || '—';
+
+    // Walk up to find an anchor link to the game page
+    const anchor = coverImg.closest('a[href]');
+    if (anchor) {
+      const anchorHref = anchor.getAttribute('href') || '';
+      href = anchorHref.startsWith('http') ? anchorHref : `https://www.backloggd.com${anchorHref}`;
+    }
+  }
+
+  if (!coverUrl) throw new Error('No game cover found');
+
+  // Activate the card
   const card = document.getElementById('mc-game');
   if (card) card.classList.remove('mc-inactive');
 
-  setMediaCard('game', { title, coverUrl, href: href || fallbackUrl });
+  setMediaCard('game', { title, coverUrl, href });
 }
 
 // ─── Media Cards — Init ───────────────────────────────────────────────────────
